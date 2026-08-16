@@ -132,7 +132,7 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
             fd.write(buff)
             fd.close()
             
-def gbtMaster(test, train, binaryClassFlag, log_location, bin_time, gb_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols):
+def gbtMaster(test, train, binaryClassFlag, bin_time, log_location, gb_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols):
     gbt = GBTClassifier(featuresCol = "features",
                         labelCol = "label_bin")
                 
@@ -174,8 +174,8 @@ def gbtMaster(test, train, binaryClassFlag, log_location, bin_time, gb_results_l
     gb_falsePositive = gbEval.evaluate(gbPredictions, {gbEval.metricName: "falsePositiveRateByLabel",
                                                      gbEval.metricLabel: 1.0})
 
-    gb_train_time = (begin_gbTraining - end_gbTraining).total_seconds()
-    gb_test_time = (begin_gbPredictions - end_gbPredictions).total_seconds()
+    gb_train_time = (end_gbTraining - begin_gbTraining).total_seconds()
+    gb_test_time = (end_gbPredictions - begin_gbPredictions).total_seconds()
     ################################
     # Write to save_results_location
     ################################

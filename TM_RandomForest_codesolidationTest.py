@@ -43,30 +43,21 @@ percent_attack_data = 0.3
 num_top_labels = 10
 not_enough_rows_threshhold = 500
 
-conn_server_loc = 'hdfs://hadoop-master:9000/bagui-class/RPlenkers/Datasets/2022-05-23/Full_Dataset'
-rf_results_location = '/home/tmcelroy/results/randomForest/' + str(datetime.date.today()) + '_results.csv'
-gb_results_location = '/home/tmcelroy/results/gradientBoost/' + str(datetime.date.today()) + '_results.csv'
-log_location = "/home/tmcelroy/logs/randomForest/" + str(datetime.date.today()) + "_log.txt"
+conn_server_loc = '/home/kali/datasets/zeekdata24_full_csv'
+rf_results_location = '/home/kali/datasets/randomforest/results/randomForest/' + str(datetime.date.today()) + '_results.csv'
+gb_results_location = '/home/kali/datasets/randomforest/results/gradientBoost/' + str(datetime.date.today()) + '_results.csv'
+log_location = "/home/kali/datasets/randomforest/logs/randomForest/" + str(datetime.date.today()) + "_log.txt"
     
 ########################
 # code start
 ########################
 
-spark = ( 
+spark = (
     SparkSession
     .builder
-    .master("spark://hadoop-master:7077")
+    .master("local[*]")
     .appName("TM_RandoForest")
-    .config("spark.driver.cores", '4')
-    .config("spark.dynamicAllocation.shuffleTracking.enabled", "true")
-    .config("spark.dynamicAllocation.enabled", "true")
-    .config("spark.dynamicAllocation.minExecutors", 10)
-    .config("spark.dynamicAllocation.maxExecutors", 30)
-    .config("spark.executor.instances", '20')
-    .config("spark.executor.cores",'2')
-    .config("spark.executor.memory", "5g")
-    .config("spark.sql.shuffle.partitions",'72')
-    .config("spark.submit.deployMode", "client")
+    .config("spark.driver.memory", "4g")
     .getOrCreate()
     )
         
@@ -76,7 +67,7 @@ localNow = str(datetime.datetime.now().strftime("%H:%M:%S"))
 printToLog("--------------\n-------------\nBegin run\n-----------\n----------\n\n", log_location)
 printToLog("Dataset location - " + conn_server_loc, log_location)
 
-source_df = spark.read.option("header", True).options(inferSchema=True).csv(conn_server_loc)
+source_df = spark.read.parquet(conn_server_loc)
  
 try:
     df_renamed = rename_columns(source_df)
