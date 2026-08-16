@@ -67,7 +67,7 @@ localNow = str(datetime.datetime.now().strftime("%H:%M:%S"))
 printToLog("--------------\n-------------\nBegin run\n-----------\n----------\n\n", log_location)
 printToLog("Dataset location - " + conn_server_loc, log_location)
 
-source_df = spark.read.parquet(conn_server_loc)
+source_df = spark.read.option("header", True).options(inferSchema=True).csv(conn_server_loc)
  
 try:
     df_renamed = rename_columns(source_df)
