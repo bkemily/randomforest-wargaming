@@ -50,9 +50,11 @@ def csvAppendBuffer(*addMe):
     #-1 slice to get rid of a trailing ,
     return result[:-1]
 
-def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols):
-    rf = RandomForestClassifier(featuresCol = "features", 
-                                        labelCol = "label_bin")
+def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols, weight_col=None):
+    if weight_col:
+        rf = RandomForestClassifier(featuresCol="features", labelCol="label_bin", weightCol=weight_col)
+    else:
+        rf = RandomForestClassifier(featuresCol="features", labelCol="label_bin")
               
     begin_randForestTraining = datetime.datetime.now()     
     rfModel = rf.fit(train)
@@ -82,20 +84,24 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
         areaUnderCurve = "na"
 
     cfsn_temp = metrics.confusionMatrix()
-    cfsn_mtrx = np.array2string(cfsn_temp.toArray()).replace('\n', '')
+    cfsn_mtrx = np.array2string(cfsn_temp.toArray().astype(int)).replace('\n', '')
     accuracy = evaluator.evaluate(predictions, {evaluator.metricName: "accuracy"})
-    precision = evaluator.evaluate(predictions, {evaluator.metricName: "precisionByLabel",
-                                                 evaluator.metricLabel: 1.0})
-    recall = evaluator.evaluate(predictions, {evaluator.metricName: "recallByLabel",
-                                              evaluator.metricLabel: 1.0})
-    f_measure = evaluator.evaluate(predictions, {evaluator.metricName: "fMeasureByLabel",
-                                                 evaluator.metricLabel: 1.0})
-    truePositive = evaluator.evaluate(predictions, {evaluator.metricName: "truePositiveRateByLabel",
-                                                    evaluator.metricLabel: 1.0})
-    falsePositive = evaluator.evaluate(predictions, {evaluator.metricName: "falsePositiveRateByLabel",
-                                                     evaluator.metricLabel: 1.0})
 
-    
+    # CHANGED: weighted-average across ALL classes, instead of only class 1.0
+    precision = evaluator.evaluate(predictions, {evaluator.metricName: "weightedPrecision"})
+    recall = evaluator.evaluate(predictions, {evaluator.metricName: "weightedRecall"})
+    f_measure = evaluator.evaluate(predictions, {evaluator.metricName: "weightedFMeasure"})
+    truePositive = evaluator.evaluate(predictions, {evaluator.metricName: "weightedTruePositiveRate"})
+    falsePositive = evaluator.evaluate(predictions, {evaluator.metricName: "weightedFalsePositiveRate"})
+
+    # NEW: log per-class precision/recall/F1 so you can see each MITRE tactic individually
+    distinct_labels = sorted(r["label_bin"] for r in predictions.select("label_bin").distinct().collect())
+    for lbl in distinct_labels:
+        lbl_p = evaluator.evaluate(predictions, {evaluator.metricName: "precisionByLabel", evaluator.metricLabel: float(lbl)})
+        lbl_r = evaluator.evaluate(predictions, {evaluator.metricName: "recallByLabel", evaluator.metricLabel: float(lbl)})
+        lbl_f1 = evaluator.evaluate(predictions, {evaluator.metricName: "fMeasureByLabel", evaluator.metricLabel: float(lbl)})
+        printToLog(f"  label_bin {int(lbl)} -> precision={lbl_p:.3f}, recall={lbl_r:.3f}, f1={lbl_f1:.3f}", log_location)
+
     train_time = (end_randForestTraining - begin_randForestTraining).total_seconds()
     test_time = (end_randForestPredictions - begin_randForestPredictions).total_seconds()
 
@@ -123,7 +129,7 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
                            train_time,
                            test_time)
                            
-        header = csvAppendBuffer(headerString)
+        header = csvAppendBuffer(*headerString)
         
         with open(rf_results_location, 'a') as fd:
             if getsize(rf_results_location) == 0:
@@ -198,7 +204,7 @@ def gbtMaster(test, train, binaryClassFlag, bin_time, log_location, gb_results_l
                            gb_train_time,
                            gb_test_time)
                            
-        header = csvAppendBuffer(headerString)
+        header = csvAppendBuffer(*headerString)
         
         with open(gb_results_location, 'a') as fd:
             if getsize(gb_results_location) == 0:

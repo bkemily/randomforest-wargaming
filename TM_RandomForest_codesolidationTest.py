@@ -121,6 +121,15 @@ for key in df_dict:
         # %%
         conn_df = genFullBinnedDF(unbinned_df, attrList_ip_addr, attrList_port, attrList_bool, attrList_nominal, nominal_percent_agg, attrList_numeric, numeric_percent_trim, replace_bool).persist()
         printToLog("Binning finished", log_location)
+
+        # NEW: balanced class weights — rarer classes get a higher weight so the
+        # model is penalized more for missing them. Same formula sklearn uses for
+        # class_weight='balanced': total / (num_classes * class_count).
+        class_counts = conn_df.groupBy("label_bin").count()
+        total_count = conn_df.count()
+        num_classes = class_counts.count()
+        class_counts = class_counts.withColumn("class_weight", total_count / (num_classes * col("count")))
+        conn_df = conn_df.join(class_counts.select("label_bin", "class_weight"), on="label_bin", how="left").persist()
         
         end_binning = datetime.datetime.now()
         bin_time = (end_binning - begin_binning).total_seconds()
@@ -175,8 +184,7 @@ for key in df_dict:
             train.printSchema()
             
             if runRF:
-                randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols)
-
+                randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols, weight_col="class_weight")
             if runGBT:
                 gbtMaster (test, train, binaryClassFlag, bin_time, log_location,  gb_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols)
 
