@@ -71,12 +71,17 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
     predictions = rfModel.transform(test)
     end_randForestPredictions = datetime.datetime.now()
 
-    predictions_and_labels = predictions.select(["prediction", 
-                                                 "label_bin"])
+    predictions_and_labels = predictions.select(["prediction", "label_bin"])
     predictions_and_labels.selectExpr("cast(prediction as int) prediction")
     metrics = MulticlassMetrics(predictions_and_labels.rdd.map(tuple))
     evaluator = MulticlassClassificationEvaluator(labelCol = "label_bin", 
                                                   predictionCol = "prediction")
+
+    # Tactic name lookup directly from predictions, instead of reading
+    # a separate mapping file. Uses the same data the confusion matrix
+    # comes from, so the indices always line up.
+    bin_to_name = {int(row["label_bin"]): row["label_multi"]
+                   for row in predictions.select("label_bin", "label_multi").distinct().collect()}
 
     if binaryClassFlag:                   
         binary_metrics = BinaryClassificationMetrics(predictions_and_labels.select("prediction", "label_bin").rdd.map(tuple))
@@ -89,33 +94,34 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
     cfsn_mtrx = np.array2string(cfsn_array).replace('\n', '')
     accuracy = evaluator.evaluate(predictions, {evaluator.metricName: "accuracy"})
 
-    # weighted-average across ALL classes, instead of only class 1.0
     precision = evaluator.evaluate(predictions, {evaluator.metricName: "weightedPrecision"})
     recall = evaluator.evaluate(predictions, {evaluator.metricName: "weightedRecall"})
     f_measure = evaluator.evaluate(predictions, {evaluator.metricName: "weightedFMeasure"})
     truePositive = evaluator.evaluate(predictions, {evaluator.metricName: "weightedTruePositiveRate"})
     falsePositive = evaluator.evaluate(predictions, {evaluator.metricName: "weightedFalsePositiveRate"})
 
-    # per-class TP/FP/FN/TN as raw counts (not rates), computed directly from the confusion matrix
+    # use bin_to_name instead of "bin{i+1}"
     total_count = cfsn_array.sum()
     num_classes = cfsn_array.shape[0]
-    tp_fp_fn_tn_list = []   # collects one string per class for the CSV
+    tp_fp_fn_tn_list = []
     for i in range(num_classes):
         tp = int(cfsn_array[i, i])
         fn = int(cfsn_array[i, :].sum() - tp)
         fp = int(cfsn_array[:, i].sum() - tp)
         tn = int(total_count - tp - fn - fp)
-        line = f"bin{i+1}: TP={tp} FP={fp} FN={fn} TN={tn}"
-        printToLog(f"  label_bin {i+1} -> TP={tp}, FP={fp}, FN={fn}, TN={tn}", log_location)
+        tactic_name = bin_to_name.get(i + 1, f"bin{i+1}")   # fallback only if a bin has zero rows in predictions
+        line = f"{tactic_name}: TP={tp} FP={fp} FN={fn} TN={tn}"
+        printToLog(f"  {tactic_name} -> TP={tp}, FP={fp}, FN={fn}, TN={tn}", log_location)
         tp_fp_fn_tn_list.append(line)
 
-    # per-class precision/recall/F1 (rates)
+    # use bin_to_name instead of the raw label_bin number
     distinct_labels = sorted(r["label_bin"] for r in predictions.select("label_bin").distinct().collect())
     for lbl in distinct_labels:
         lbl_p = evaluator.evaluate(predictions, {evaluator.metricName: "precisionByLabel", evaluator.metricLabel: float(lbl)})
         lbl_r = evaluator.evaluate(predictions, {evaluator.metricName: "recallByLabel", evaluator.metricLabel: float(lbl)})
         lbl_f1 = evaluator.evaluate(predictions, {evaluator.metricName: "fMeasureByLabel", evaluator.metricLabel: float(lbl)})
-        printToLog(f"  label_bin {int(lbl)} -> precision={lbl_p:.3f}, recall={lbl_r:.3f}, f1={lbl_f1:.3f}", log_location)
+        tactic_name = bin_to_name.get(int(lbl), f"bin{int(lbl)}")
+        printToLog(f"  {tactic_name} -> precision={lbl_p:.3f}, recall={lbl_r:.3f}, f1={lbl_f1:.3f}", log_location)
 
     train_time = (end_randForestTraining - begin_randForestTraining).total_seconds()
     test_time = (end_randForestPredictions - begin_randForestPredictions).total_seconds()
