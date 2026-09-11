@@ -157,7 +157,7 @@ for key in df_dict:
                         "local_orig_bin",
                         "missed_bytes_bin",
                           )
-        confusion_matrices = []   # NEW — before the loop starts
+        confusion_matrices = []
 
         for attNum in attribute_size_list:
             feature_cols = []
@@ -179,8 +179,8 @@ for key in df_dict:
             train.printSchema()
     
             if runRF:
-                two_by_two_matrices = randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols, weight_col="class_weight")
-                confusion_matrices.append((attNum, two_by_two_matrices))
+                tactic_results = randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols, weight_col="class_weight")
+                confusion_matrices.append((attNum, tactic_results))
 
             if runGBT:
                 gbtMaster (test, train, binaryClassFlag, bin_time, log_location,  gb_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols)
@@ -189,10 +189,15 @@ for key in df_dict:
             printToLog("End of for each loop " + key + "\n", log_location)
             conn_df.unpersist()
 
-        # Print Matrix
-        for attNum, two_by_two_matrices in confusion_matrices:
-            for tactic_name, two_by_two in two_by_two_matrices:
-                print(f"\n{tactic_name} — TP/FP/FN/TN ({attNum} features):")
-                display(two_by_two)
+        # Print results grouped by feature count, then by tactic
+        for attNum, tactic_results in confusion_matrices:
+            print(f"\n===== {attNum} features =====")
+            for result in tactic_results:
+                print(f"\n{result['tactic_name']}:")
+                display(result["two_by_two"])
+                print(f"  Accuracy: {result['accuracy']:.1%}   "
+                      f"Precision: {result['precision']:.1%}   "
+                      f"Recall: {result['recall']:.1%}   "
+                      f"F1: {result['f1']:.1%}")
 
 printToLog("End run\n-----------\n----------\n\n", log_location)

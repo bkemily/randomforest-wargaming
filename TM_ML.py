@@ -68,31 +68,19 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
     predictions_and_labels = predictions.select(["prediction", "label_bin"])
     predictions_and_labels.selectExpr("cast(prediction as int) prediction")
     metrics = MulticlassMetrics(predictions_and_labels.rdd.map(tuple))
-    evaluator = MulticlassClassificationEvaluator(labelCol = "label_bin", predictionCol = "prediction")
 
     bin_to_name = {int(row["label_bin"]): row["label_multi"]
                    for row in predictions.select("label_bin", "label_multi").distinct().collect()}
 
-    if binaryClassFlag:                   
-        binary_metrics = BinaryClassificationMetrics(predictions_and_labels.select("prediction", "label_bin").rdd.map(tuple))
-        areaUnderCurve = binary_metrics.areaUnderROC
-    else:
-        areaUnderCurve = "na"
-
     cfsn_temp = metrics.confusionMatrix()
     cfsn_array = cfsn_temp.toArray().astype(int)
-    accuracy = evaluator.evaluate(predictions, {evaluator.metricName: "accuracy"})
 
-    precision = evaluator.evaluate(predictions, {evaluator.metricName: "weightedPrecision"})
-    recall = evaluator.evaluate(predictions, {evaluator.metricName: "weightedRecall"})
-    f_measure = evaluator.evaluate(predictions, {evaluator.metricName: "weightedFMeasure"})
-    truePositive = evaluator.evaluate(predictions, {evaluator.metricName: "weightedTruePositiveRate"})
-    falsePositive = evaluator.evaluate(predictions, {evaluator.metricName: "weightedFalsePositiveRate"})
-
-    # build one 2x2 per tactic instead of a text line per tactic
+    # Per-tactic 2x2 table AND that tactic's own accuracy/precision/F1 —
+    # computed directly from TP/FP/FN/TN, per Dustin's request for these
+    # broken out per t-code instead of one overall weighted-average value.
     total_count = cfsn_array.sum()
     num_classes = cfsn_array.shape[0]
-    two_by_two_matrices = []
+    tactic_results = []
     for i in range(num_classes):
         tp = int(cfsn_array[i, i])
         fn = int(cfsn_array[i, :].sum() - tp)
@@ -106,40 +94,34 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
             index=["Actual: Positive", "Actual: Negative"],
             columns=["Predicted: Positive", "Predicted: Negative"]
         )
-        two_by_two_matrices.append((tactic_name, two_by_two))
 
-        printToLog(f"  {tactic_name} -> TP={tp}, FP={fp}, FN={fn}, TN={tn}", log_location)
+        tactic_accuracy = (tp + tn) / total_count if total_count > 0 else float("nan")
+        tactic_precision = tp / (tp + fp) if (tp + fp) > 0 else float("nan")
+        tactic_recall = tp / (tp + fn) if (tp + fn) > 0 else float("nan")
+        tactic_f1 = (2 * tactic_precision * tactic_recall / (tactic_precision + tactic_recall)
+                     if (tactic_precision + tactic_recall) > 0 else float("nan"))
 
-    distinct_labels = sorted(r["label_bin"] for r in predictions.select("label_bin").distinct().collect())
-    for lbl in distinct_labels:
-        lbl_p = evaluator.evaluate(predictions, {evaluator.metricName: "precisionByLabel", evaluator.metricLabel: float(lbl)})
-        lbl_r = evaluator.evaluate(predictions, {evaluator.metricName: "recallByLabel", evaluator.metricLabel: float(lbl)})
-        lbl_f1 = evaluator.evaluate(predictions, {evaluator.metricName: "fMeasureByLabel", evaluator.metricLabel: float(lbl)})
-        tactic_name = bin_to_name.get(int(lbl), f"bin{int(lbl)}")
-        printToLog(f"  {tactic_name} -> precision={lbl_p:.3f}, recall={lbl_r:.3f}, f1={lbl_f1:.3f}", log_location)
+        printToLog(f"  {tactic_name} -> TP={tp}, FP={fp}, FN={fn}, TN={tn}, "
+                   f"accuracy={tactic_accuracy:.3f}, precision={tactic_precision:.3f}, "
+                   f"recall={tactic_recall:.3f}, f1={tactic_f1:.3f}", log_location)
+
+        tactic_results.append({
+            "tactic_name": tactic_name,
+            "two_by_two": two_by_two,
+            "accuracy": tactic_accuracy,
+            "precision": tactic_precision,
+            "recall": tactic_recall,
+            "f1": tactic_f1,
+        })
 
     train_time = (end_randForestTraining - begin_randForestTraining).total_seconds()
     test_time = (end_randForestPredictions - begin_randForestPredictions).total_seconds()
 
     printToLog("randomForest metrics finished", log_location)
 
-    # matches the trimmed headerString above with no cfsn_mtrx, no tp_fp_fn_tn_by_class
-    if countRuns:
-        buff = csvAppendBuffer(localNow, conn_server_loc, key, percent_attack_data,
-                           len(feature_cols), feature_cols,
-                           accuracy, precision, recall, f_measure, areaUnderCurve,
-                           truePositive, falsePositive,
-                           bin_time, train_time, test_time)
-                           
-        header = csvAppendBuffer(*headerString)
-        
-        with open(rf_results_location, 'a') as fd:
-            if getsize(rf_results_location) == 0:
-                fd.write(header)
-            fd.write(buff)
-            fd.close()
+    # CSV write removed per Dustin — "I would just remove the csv code"
 
-    return two_by_two_matrices   # returns the list of (tactic_name, 2x2 df) instead of cfsn_df
+    return tactic_results   # list of dicts: tactic_name, two_by_two, accuracy, precision, recall, f1
             
 def gbtMaster(test, train, binaryClassFlag, bin_time, log_location, gb_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols):
     gbt = GBTClassifier(featuresCol = "features",
@@ -168,21 +150,18 @@ def gbtMaster(test, train, binaryClassFlag, bin_time, log_location, gb_results_l
     
     gb_areaUnderCurve = gb_binary_metrics.areaUnderROC
 
-    # .astype(int) matches randForestMaster, avoids scientific notation
     gb_cfsn_temp = gbMetrics.confusionMatrix()
     gb_cfsn_array = gb_cfsn_temp.toArray().astype(int)
     gb_cfsn_mtrx = np.array2string(gb_cfsn_array).replace('\n', '')
 
     gb_accuracy = gbEval.evaluate(gbPredictions, {gbEval.metricName: "accuracy"})
 
-    # weighted-average across ALL classes matches randForestMaster
     gb_precision = gbEval.evaluate(gbPredictions, {gbEval.metricName: "weightedPrecision"})
     gb_recall = gbEval.evaluate(gbPredictions, {gbEval.metricName: "weightedRecall"})
     gb_f_measure = gbEval.evaluate(gbPredictions, {gbEval.metricName: "weightedFMeasure"})
     gb_truePositive = gbEval.evaluate(gbPredictions, {gbEval.metricName: "weightedTruePositiveRate"})
     gb_falsePositive = gbEval.evaluate(gbPredictions, {gbEval.metricName: "weightedFalsePositiveRate"})
 
-    # per-class TP/FP/FN/TN as raw counts matches randForestMaster
     gb_total_count = gb_cfsn_array.sum()
     gb_num_classes = gb_cfsn_array.shape[0]
     gb_tp_fp_fn_tn_list = []
