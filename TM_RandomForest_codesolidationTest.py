@@ -103,9 +103,29 @@ for key in df_dict:
         if binaryClassFlag:
             unbinned_df = unbinned_df.withColumn("label_bin", when((col("label_multi") != "none"), 0.0).otherwise(1.0))
         else:
-    # exclude benign records entirely no 8th "none" bin for benign traffic.
+            # exclude benign records entirely — no 8th "none" bin for benign traffic.
             unbinned_df = unbinned_df.filter(col("label_multi") != benign_label)
-            unbinned_df = genNominalBinnedDF(unbinned_df, "label_multi", 1.0, False, mapping_output_path="/home/kali/datasets/randomforest/logs/randomForest/" + str(datetime.date.today()) + "_label_mapping") #creates new col label_multi_bin
+
+            # downsample every tactic to match the smallest tactic's count,
+            # so no single t-code (e.g. Credential Access) dominates training.
+            class_counts = unbinned_df.groupBy("label_multi").count().collect()
+            min_count = min(row["count"] for row in class_counts)
+            printToLog(f"Balancing all tactics down to {min_count} rows each", log_location)
+
+            balanced_dfs = []
+            for row in class_counts:
+                tactic, tactic_count = row["label_multi"], row["count"]
+                fraction = min_count / tactic_count
+                tactic_df = unbinned_df.filter(col("label_multi") == tactic)
+                if fraction < 1.0:
+                    tactic_df = tactic_df.sample(withReplacement=False, fraction=fraction, seed=1234)
+                balanced_dfs.append(tactic_df)
+
+            unbinned_df = balanced_dfs[0]
+            for df in balanced_dfs[1:]:
+                unbinned_df = unbinned_df.unionByName(df)
+
+            unbinned_df = genNominalBinnedDF(unbinned_df, "label_multi", 1.0, False, mapping_output_path="/home/kali/datasets/randomforest/logs/randomForest/" + str(datetime.date.today()) + "_label_mapping")
             unbinned_df = unbinned_df.withColumn("label_bin", unbinned_df["label_multi_bin"].cast('double') )
             
         #Carry out the binning on the df
