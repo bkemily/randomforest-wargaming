@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from pyspark.sql.functions import *
 from pyspark.ml import Pipeline #not used as of yet, but probably should be
 from pyspark.ml.classification import RandomForestClassifier
