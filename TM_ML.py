@@ -101,8 +101,8 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
         tactic_name = bin_to_name.get(i + 1, f"bin{i+1}")
 
         two_by_two = pd.DataFrame(
-            [[f"True Positive (TP): {tp}", f"False Negative (FN): {fn}"],
-             [f"False Positive (FP): {fp}", f"True Negative (TN): {tn}"]],
+            [[f"TP: {tp}", f"FN: {fn}"],
+             [f"FP: {fp}", f"TN: {tn}"]],
             index=["Actual: Positive", "Actual: Negative"],
             columns=["Predicted: Positive", "Predicted: Negative"]
         )
