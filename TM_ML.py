@@ -76,8 +76,8 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
     cfsn_array = cfsn_temp.toArray().astype(int)
 
     # Per-tactic 2x2 table AND that tactic's own accuracy/precision/F1 —
-    # computed directly from TP/FP/FN/TN, per Dustin's request for these
-    # broken out per t-code instead of one overall weighted-average value.
+    # computed directly from TP/FP/FN/TN, broken out per tactic
+    # instead of one overall weighted-average value.
     total_count = cfsn_array.sum()
     num_classes = cfsn_array.shape[0]
     tactic_results = []
@@ -118,8 +118,6 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
     test_time = (end_randForestPredictions - begin_randForestPredictions).total_seconds()
 
     printToLog("randomForest metrics finished", log_location)
-
-    # CSV write removed per Dustin — "I would just remove the csv code"
 
     return tactic_results   # list of dicts: tactic_name, two_by_two, accuracy, precision, recall, f1
             
