@@ -101,10 +101,10 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
         tactic_name = bin_to_name.get(i + 1, f"bin{i+1}")
 
         two_by_two = pd.DataFrame(
-            [[tp, fn],
-             [fp, tn]],
-            index=["Actual: Attack", "Actual: Not this tactic"],
-            columns=["Predicted: Attack", "Predicted: Not this tactic"]
+            [[f"True Positive (TP): {tp}", f"False Negative (FN): {fn}"],
+             [f"False Positive (FP): {fp}", f"True Negative (TN): {tn}"]],
+            index=["Actual: Positive", "Actual: Negative"],
+            columns=["Predicted: Positive", "Predicted: Negative"]
         )
         two_by_two_matrices.append((tactic_name, two_by_two))
 
