@@ -113,6 +113,10 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
         lbl_f1 = evaluator.evaluate(predictions, {evaluator.metricName: "fMeasureByLabel", evaluator.metricLabel: float(lbl)})
         printToLog(f"  label_bin {int(lbl)} -> precision={lbl_p:.3f}, recall={lbl_r:.3f}, f1={lbl_f1:.3f}", log_location)
 
+    train_time = (end_randForestTraining - begin_randForestTraining).total_seconds()
+    test_time = (end_randForestPredictions - begin_randForestPredictions).total_seconds()
+
+    printToLog("randomForest metrics finished", log_location)
     ################################
     # Write to save_results_location
     ################################         
