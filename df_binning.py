@@ -237,12 +237,14 @@ def genStringIndexBinnedDF(df, col_name, replace_bool):
 # sorting by occurrence, then aggregating the sum until the percent_aggr (%) of the total occurences are 
 # covered. These values will be assigned their own bins, while everything else is pooled into a single bin.
 
-def genNominalBinnedDF(df, col_name, percent_aggr, replace_bool):
+def genNominalBinnedDF(df, col_name, percent_aggr, replace_bool, mapping_output_path=None):
 
     bin_col_name = col_name + '_bin'
     col_ref = col_name + '_ref'
     
-    w = Window.orderBy(f.monotonically_increasing_id())
+    # CHANGED: order bins directly by count, descending — instead of relying on
+    # monotonically_increasing_id() to have preserved the earlier sort order.
+    w = Window.orderBy(f.col("count").desc())
     
     df_bin = df.select(col_name).groupBy(col_name).count().sort("count", ascending=False).dropna()
     df_bin = df_bin.withColumn(bin_col_name, f.row_number().over(w)).withColumnRenamed(col_name, col_ref)
@@ -270,7 +272,20 @@ def genNominalBinnedDF(df, col_name, percent_aggr, replace_bool):
     # gives min() takes 1 positional argument but 2 were given error
     # error fixed: import conflict from pyspark.sql.functions was causing 
     # this (https://stackoverflow.com/questions/36604460/python-function-such-as-max-doesnt-work-in-pyspark-application)
-   
+
+    # NEW: write out the full label -> bin lookup table before anything gets
+    # filtered or dropped. Includes a "kept_as_own_bin" flag so you can see
+    # which original labels get individual bins vs. collapsed into the
+    # "everything else" bin (j+1) below.
+    if mapping_output_path:
+        (df_bin
+            .withColumn("kept_as_own_bin", f.col(bin_col_name) <= j)
+            .select(f.col(col_ref).alias(col_name), bin_col_name, "kept_as_own_bin")
+            .coalesce(1)
+            .write.mode("overwrite")
+            .option("header", True)
+            .csv(mapping_output_path))
+
     df_bin = df_bin.filter( f.col(bin_col_name) <= j ).drop("count")
     
     df = df.join(df_bin, df.__getattr__(col_name) == df_bin.__getattr__(col_ref),"left").drop(col_ref)
