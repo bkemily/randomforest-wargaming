@@ -62,11 +62,6 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
     end_randForestTraining = datetime.datetime.now()
     printToLog("randomForest model fit", log_location)
             
-    #############
-    # Predictions
-    #############   
-    #This timing metric currently doesn't make much sense,
-    #as it will be significantly impacted by the size of "test"
     begin_randForestPredictions = datetime.datetime.now()
     predictions = rfModel.transform(test)
     end_randForestPredictions = datetime.datetime.now()
@@ -74,12 +69,8 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
     predictions_and_labels = predictions.select(["prediction", "label_bin"])
     predictions_and_labels.selectExpr("cast(prediction as int) prediction")
     metrics = MulticlassMetrics(predictions_and_labels.rdd.map(tuple))
-    evaluator = MulticlassClassificationEvaluator(labelCol = "label_bin", 
-                                                  predictionCol = "prediction")
+    evaluator = MulticlassClassificationEvaluator(labelCol = "label_bin", predictionCol = "prediction")
 
-    # Tactic name lookup directly from predictions, instead of reading
-    # a separate mapping file. Uses the same data the confusion matrix
-    # comes from, so the indices always line up.
     bin_to_name = {int(row["label_bin"]): row["label_multi"]
                    for row in predictions.select("label_bin", "label_multi").distinct().collect()}
 
@@ -91,8 +82,13 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
 
     cfsn_temp = metrics.confusionMatrix()
     cfsn_array = cfsn_temp.toArray().astype(int)
-    cfsn_mtrx = np.array2string(cfsn_array).replace('\n', '')
     accuracy = evaluator.evaluate(predictions, {evaluator.metricName: "accuracy"})
+
+    # Build labeled confusion matrix no printing in CSV here anymore, returned as output instead
+    ordered_names = [bin_to_name.get(i + 1, f"bin{i+1}") for i in range(cfsn_array.shape[0])]
+    cfsn_df = pd.DataFrame(cfsn_array, index=ordered_names, columns=ordered_names)
+    cfsn_df.index.name = "Actual"
+    cfsn_df.columns.name = "Predicted"
 
     precision = evaluator.evaluate(predictions, {evaluator.metricName: "weightedPrecision"})
     recall = evaluator.evaluate(predictions, {evaluator.metricName: "weightedRecall"})
@@ -100,7 +96,6 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
     truePositive = evaluator.evaluate(predictions, {evaluator.metricName: "weightedTruePositiveRate"})
     falsePositive = evaluator.evaluate(predictions, {evaluator.metricName: "weightedFalsePositiveRate"})
 
-    # use bin_to_name instead of "bin{i+1}"
     total_count = cfsn_array.sum()
     num_classes = cfsn_array.shape[0]
     tp_fp_fn_tn_list = []
@@ -109,12 +104,11 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
         fn = int(cfsn_array[i, :].sum() - tp)
         fp = int(cfsn_array[:, i].sum() - tp)
         tn = int(total_count - tp - fn - fp)
-        tactic_name = bin_to_name.get(i + 1, f"bin{i+1}")   # fallback only if a bin has zero rows in predictions
+        tactic_name = bin_to_name.get(i + 1, f"bin{i+1}")
         line = f"{tactic_name}: TP={tp} FP={fp} FN={fn} TN={tn}"
         printToLog(f"  {tactic_name} -> TP={tp}, FP={fp}, FN={fn}, TN={tn}", log_location)
         tp_fp_fn_tn_list.append(line)
 
-    # use bin_to_name instead of the raw label_bin number
     distinct_labels = sorted(r["label_bin"] for r in predictions.select("label_bin").distinct().collect())
     for lbl in distinct_labels:
         lbl_p = evaluator.evaluate(predictions, {evaluator.metricName: "precisionByLabel", evaluator.metricLabel: float(lbl)})
@@ -127,37 +121,23 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
     test_time = (end_randForestPredictions - begin_randForestPredictions).total_seconds()
 
     printToLog("randomForest metrics finished", log_location)
-    ################################
-    # Write to save_results_location
-    ################################         
+
     if countRuns:
-        buff = csvAppendBuffer(localNow,
-                           conn_server_loc,
-                           key,
-                           percent_attack_data,
-                           len(feature_cols),
-                           feature_cols,
-                           cfsn_mtrx,
-                           accuracy,
-                           precision,
-                           recall,
-                           f_measure,
-                           areaUnderCurve,
-                           truePositive,
-                           falsePositive,
-                           tp_fp_fn_tn_list,
-                           bin_time,
-                           train_time,
-                           test_time)
+        buff = csvAppendBuffer(localNow, conn_server_loc, key, percent_attack_data,
+                           len(feature_cols), feature_cols,
+                           accuracy, precision, recall, f_measure, areaUnderCurve,
+                           truePositive, falsePositive, tp_fp_fn_tn_list,
+                           bin_time, train_time, test_time)
                            
         header = csvAppendBuffer(*headerString)
         
         with open(rf_results_location, 'a') as fd:
             if getsize(rf_results_location) == 0:
                 fd.write(header)
-                
             fd.write(buff)
             fd.close()
+
+    return cfsn_df   # prints matrix to output instead of CSV
             
 def gbtMaster(test, train, binaryClassFlag, bin_time, log_location, gb_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols):
     gbt = GBTClassifier(featuresCol = "features",

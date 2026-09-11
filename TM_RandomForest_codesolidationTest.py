@@ -157,41 +157,41 @@ for key in df_dict:
                         "local_orig_bin",
                         "missed_bytes_bin",
                           )
+        confusion_matrices = []   # NEW — before the loop starts
+
         for attNum in attribute_size_list:
             feature_cols = []
             local_att_list = attribute_list[:attNum]
-            #called from dtypes in case I care about column type when building 
-            #feature_cols in the future
             for clm, types in conn_df.dtypes:
                 if str(clm) in local_att_list:
                     feature_cols.append(clm)
-            
-            # build feature vector for Classifiers
+    
             assembler = VectorAssembler(inputCols = feature_cols, outputCol = "features")
             features_df = assembler.transform(conn_df)
-            
+    
             printToLog("feature_cols - " + str(len(feature_cols)) + " - " + str(feature_cols), log_location)
-            
-            ########################
-            # Model
-            ########################   
-            
+    
             train, test = features_df.randomSplit([0.7, 0.3], seed = 2057)
-                                                              
+                                                      
             for clm in feature_cols:
-                printToLog(str(clm) + " distinct values: " + str(train.select(clm)
-                                                                      .distinct()
-                                                                      .count()), log_location)
-            
+                printToLog(str(clm) + " distinct values: " + str(train.select(clm).distinct().count()), log_location)
+    
             train.printSchema()
-            
+    
             if runRF:
-                randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols, weight_col="class_weight")
+                cfsn_df = randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols, weight_col="class_weight")
+                confusion_matrices.append((attNum, cfsn_df))
+
             if runGBT:
                 gbtMaster (test, train, binaryClassFlag, bin_time, log_location,  gb_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols)
 
             print("\n\nEnd of for each loop " + key + "\n\n\n\n\n\n\n")
             printToLog("End of for each loop " + key + "\n", log_location)
             conn_df.unpersist()
+
+        # Print Matrix
+        for attNum, cfsn_df in confusion_matrices:
+            print(f"\nConfusion Matrix — {key} ({attNum} features):")
+            display(cfsn_df)
 
 printToLog("End run\n-----------\n----------\n\n", log_location)
