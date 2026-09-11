@@ -191,7 +191,7 @@ for key in df_dict:
 
         # Print results grouped by feature count, then by tactic
         for attNum, tactic_results in confusion_matrices:
-            print(f"\n===== {attNum} features =====")
+            print(f"\n ---------- {attNum} features ----------")
             for result in tactic_results:
                 print(f"\n{result['tactic_name']}:")
                 display(result["two_by_two"])
