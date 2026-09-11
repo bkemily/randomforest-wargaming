@@ -192,6 +192,7 @@ for key in df_dict:
         # Print Matrix
         for attNum, cfsn_df in confusion_matrices:
             print(f"\nConfusion Matrix — {key} ({attNum} features):")
+            print("(Rows = what actually happened · Columns = what the model predicted)")
             display(cfsn_df)
 
 printToLog("End run\n-----------\n----------\n\n", log_location)
