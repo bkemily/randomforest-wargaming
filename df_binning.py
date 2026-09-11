@@ -242,7 +242,7 @@ def genNominalBinnedDF(df, col_name, percent_aggr, replace_bool, mapping_output_
     bin_col_name = col_name + '_bin'
     col_ref = col_name + '_ref'
     
-    # CHANGED: order bins directly by count, descending — instead of relying on
+    # CHANGED: order bins directly by count, descending instead of relying on
     # monotonically_increasing_id() to have preserved the earlier sort order.
     w = Window.orderBy(f.col("count").desc())
     

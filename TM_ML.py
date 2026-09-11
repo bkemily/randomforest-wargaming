@@ -27,6 +27,7 @@ headerString =["Start", #localNow
                "areaUnderCurve",
                "truePositive",
                "falsePositive",
+               "tp_fp_fn_tn_by_class",
                "bin_time",
                "train_time",
                "test_time"]
@@ -95,15 +96,18 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
     truePositive = evaluator.evaluate(predictions, {evaluator.metricName: "weightedTruePositiveRate"})
     falsePositive = evaluator.evaluate(predictions, {evaluator.metricName: "weightedFalsePositiveRate"})
 
-    # NEW: per-class TP/FP/FN/TN as raw counts (not rates), computed directly from the confusion matrix
+    # per-class TP/FP/FN/TN as raw counts (not rates), computed directly from the confusion matrix
     total_count = cfsn_array.sum()
     num_classes = cfsn_array.shape[0]
+    tp_fp_fn_tn_list = []   # collects one string per class for the CSV
     for i in range(num_classes):
         tp = int(cfsn_array[i, i])
         fn = int(cfsn_array[i, :].sum() - tp)
         fp = int(cfsn_array[:, i].sum() - tp)
         tn = int(total_count - tp - fn - fp)
+        line = f"bin{i+1}: TP={tp} FP={fp} FN={fn} TN={tn}"
         printToLog(f"  label_bin {i+1} -> TP={tp}, FP={fp}, FN={fn}, TN={tn}", log_location)
+        tp_fp_fn_tn_list.append(line)
 
     # per-class precision/recall/F1 (rates)
     distinct_labels = sorted(r["label_bin"] for r in predictions.select("label_bin").distinct().collect())
@@ -135,6 +139,7 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
                            areaUnderCurve,
                            truePositive,
                            falsePositive,
+                           tp_fp_fn_tn_list,
                            bin_time,
                            train_time,
                            test_time)
@@ -161,8 +166,6 @@ def gbtMaster(test, train, binaryClassFlag, bin_time, log_location, gb_results_l
     #############
     # Predictions
     #############   
-    #This timing metric currently doesn't make much sense,
-    #as it will be significantly impacted by the size of "test"
     begin_gbPredictions = datetime.datetime.now()
     gbPredictions = gbtModel.transform(test)
     end_gbPredictions = datetime.datetime.now()
@@ -176,19 +179,33 @@ def gbtMaster(test, train, binaryClassFlag, bin_time, log_location, gb_results_l
     gb_binary_metrics = BinaryClassificationMetrics(gbPredictions_and_labels.select("prediction", "label_bin").rdd.map(tuple))
     
     gb_areaUnderCurve = gb_binary_metrics.areaUnderROC
+
+    # .astype(int) matches randForestMaster, avoids scientific notation
     gb_cfsn_temp = gbMetrics.confusionMatrix()
-    gb_cfsn_mtrx = np.array2string(gb_cfsn_temp.toArray()).replace('\n', '')
+    gb_cfsn_array = gb_cfsn_temp.toArray().astype(int)
+    gb_cfsn_mtrx = np.array2string(gb_cfsn_array).replace('\n', '')
+
     gb_accuracy = gbEval.evaluate(gbPredictions, {gbEval.metricName: "accuracy"})
-    gb_precision = gbEval.evaluate(gbPredictions, {gbEval.metricName: "precisionByLabel",
-                                                 gbEval.metricLabel: 1.0})
-    gb_recall = gbEval.evaluate(gbPredictions, {gbEval.metricName: "recallByLabel",
-                                              gbEval.metricLabel: 1.0})
-    gb_f_measure = gbEval.evaluate(gbPredictions, {gbEval.metricName: "fMeasureByLabel",
-                                                 gbEval.metricLabel: 1.0})
-    gb_truePositive = gbEval.evaluate(gbPredictions, {gbEval.metricName: "truePositiveRateByLabel",
-                                                    gbEval.metricLabel: 1.0})
-    gb_falsePositive = gbEval.evaluate(gbPredictions, {gbEval.metricName: "falsePositiveRateByLabel",
-                                                     gbEval.metricLabel: 1.0})
+
+    # weighted-average across ALL classes matches randForestMaster
+    gb_precision = gbEval.evaluate(gbPredictions, {gbEval.metricName: "weightedPrecision"})
+    gb_recall = gbEval.evaluate(gbPredictions, {gbEval.metricName: "weightedRecall"})
+    gb_f_measure = gbEval.evaluate(gbPredictions, {gbEval.metricName: "weightedFMeasure"})
+    gb_truePositive = gbEval.evaluate(gbPredictions, {gbEval.metricName: "weightedTruePositiveRate"})
+    gb_falsePositive = gbEval.evaluate(gbPredictions, {gbEval.metricName: "weightedFalsePositiveRate"})
+
+    # per-class TP/FP/FN/TN as raw counts matches randForestMaster
+    gb_total_count = gb_cfsn_array.sum()
+    gb_num_classes = gb_cfsn_array.shape[0]
+    gb_tp_fp_fn_tn_list = []
+    for i in range(gb_num_classes):
+        tp = int(gb_cfsn_array[i, i])
+        fn = int(gb_cfsn_array[i, :].sum() - tp)
+        fp = int(gb_cfsn_array[:, i].sum() - tp)
+        tn = int(gb_total_count - tp - fn - fp)
+        line = f"bin{i+1}: TP={tp} FP={fp} FN={fn} TN={tn}"
+        printToLog(f"  label_bin {i+1} -> TP={tp}, FP={fp}, FN={fn}, TN={tn}", log_location)
+        gb_tp_fp_fn_tn_list.append(line)
 
     gb_train_time = (end_gbTraining - begin_gbTraining).total_seconds()
     gb_test_time = (end_gbPredictions - begin_gbPredictions).total_seconds()
@@ -210,11 +227,12 @@ def gbtMaster(test, train, binaryClassFlag, bin_time, log_location, gb_results_l
                            gb_areaUnderCurve,
                            gb_truePositive,
                            gb_falsePositive,
+                           gb_tp_fp_fn_tn_list,
                            bin_time,
                            gb_train_time,
                            gb_test_time)
                            
-        header = csvAppendBuffer(*headerString)
+        header = csvAppendBuffer(*headerString)   # added * (was missing here)
         
         with open(gb_results_location, 'a') as fd:
             if getsize(gb_results_location) == 0:

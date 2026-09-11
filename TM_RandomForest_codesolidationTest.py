@@ -122,7 +122,7 @@ for key in df_dict:
         conn_df = genFullBinnedDF(unbinned_df, attrList_ip_addr, attrList_port, attrList_bool, attrList_nominal, nominal_percent_agg, attrList_numeric, numeric_percent_trim, replace_bool).persist()
         printToLog("Binning finished", log_location)
 
-        # NEW: balanced class weights — rarer classes get a higher weight so the
+        # balanced class weights rarer classes get a higher weight so the
         # model is penalized more for missing them. Same formula sklearn uses for
         # class_weight='balanced': total / (num_classes * class_count).
         class_counts = conn_df.groupBy("label_bin").count()
