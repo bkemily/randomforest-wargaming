@@ -103,6 +103,8 @@ for key in df_dict:
         if binaryClassFlag:
             unbinned_df = unbinned_df.withColumn("label_bin", when((col("label_multi") != "none"), 0.0).otherwise(1.0))
         else:
+    # exclude benign records entirely no 8th "none" bin for benign traffic.
+            unbinned_df = unbinned_df.filter(col("label_multi") != benign_label)
             unbinned_df = genNominalBinnedDF(unbinned_df, "label_multi", 1.0, False, mapping_output_path="/home/kali/datasets/randomforest/logs/randomForest/" + str(datetime.date.today()) + "_label_mapping") #creates new col label_multi_bin
             unbinned_df = unbinned_df.withColumn("label_bin", unbinned_df["label_multi_bin"].cast('double') )
             
