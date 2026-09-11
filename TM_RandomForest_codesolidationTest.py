@@ -6,6 +6,7 @@ Created on Wed May 18 02:56:50 2022
 """
 
 import numpy as np
+import builtins
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 import pyspark.sql.functions as func
@@ -109,7 +110,7 @@ for key in df_dict:
             # downsample every tactic to match the smallest tactic's count,
             # so no single t-code (e.g. Credential Access) dominates training.
             class_counts = unbinned_df.groupBy("label_multi").count().collect()
-            min_count = min(row["count"] for row in class_counts)
+            min_count = builtins.min(row["count"] for row in class_counts)
             printToLog(f"Balancing all tactics down to {min_count} rows each", log_location)
 
             balanced_dfs = []
