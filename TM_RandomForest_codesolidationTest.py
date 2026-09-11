@@ -179,8 +179,8 @@ for key in df_dict:
             train.printSchema()
     
             if runRF:
-                cfsn_df = randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols, weight_col="class_weight")
-                confusion_matrices.append((attNum, cfsn_df))
+                two_by_two_matrices = randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols, weight_col="class_weight")
+                confusion_matrices.append((attNum, two_by_two_matrices))
 
             if runGBT:
                 gbtMaster (test, train, binaryClassFlag, bin_time, log_location,  gb_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols)
@@ -190,9 +190,9 @@ for key in df_dict:
             conn_df.unpersist()
 
         # Print Matrix
-        for attNum, cfsn_df in confusion_matrices:
-            print(f"\nConfusion Matrix — {key} ({attNum} features):")
-            print("(Rows = what actually happened · Columns = what the model predicted)")
-            display(cfsn_df)
+        for attNum, two_by_two_matrices in confusion_matrices:
+            for tactic_name, two_by_two in two_by_two_matrices:
+                print(f"\n{tactic_name} — TP/FP/FN/TN ({attNum} features):")
+                display(two_by_two)
 
 printToLog("End run\n-----------\n----------\n\n", log_location)

@@ -20,7 +20,6 @@ headerString =["Start", #localNow
                "pct attack", #percent_attack_data,
                "num features",
                "feature_cols",
-               "cfsn_mtrx",
                "accuracy",
                "precision",
                "recall",
@@ -28,7 +27,6 @@ headerString =["Start", #localNow
                "areaUnderCurve",
                "truePositive",
                "falsePositive",
-               "tp_fp_fn_tn_by_class",
                "bin_time",
                "train_time",
                "test_time"]
@@ -85,30 +83,32 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
     cfsn_array = cfsn_temp.toArray().astype(int)
     accuracy = evaluator.evaluate(predictions, {evaluator.metricName: "accuracy"})
 
-    # Build labeled confusion matrix no printing in CSV here anymore, returned as output instead
-    ordered_names = [bin_to_name.get(i + 1, f"bin{i+1}") for i in range(cfsn_array.shape[0])]
-    cfsn_df = pd.DataFrame(cfsn_array, index=ordered_names, columns=ordered_names)
-    cfsn_df.index.name = "Actual"
-    cfsn_df.columns.name = "Predicted"
-
     precision = evaluator.evaluate(predictions, {evaluator.metricName: "weightedPrecision"})
     recall = evaluator.evaluate(predictions, {evaluator.metricName: "weightedRecall"})
     f_measure = evaluator.evaluate(predictions, {evaluator.metricName: "weightedFMeasure"})
     truePositive = evaluator.evaluate(predictions, {evaluator.metricName: "weightedTruePositiveRate"})
     falsePositive = evaluator.evaluate(predictions, {evaluator.metricName: "weightedFalsePositiveRate"})
 
+    # build one 2x2 per tactic instead of a text line per tactic
     total_count = cfsn_array.sum()
     num_classes = cfsn_array.shape[0]
-    tp_fp_fn_tn_list = []
+    two_by_two_matrices = []
     for i in range(num_classes):
         tp = int(cfsn_array[i, i])
         fn = int(cfsn_array[i, :].sum() - tp)
         fp = int(cfsn_array[:, i].sum() - tp)
         tn = int(total_count - tp - fn - fp)
         tactic_name = bin_to_name.get(i + 1, f"bin{i+1}")
-        line = f"{tactic_name}: TP={tp} FP={fp} FN={fn} TN={tn}"
+
+        two_by_two = pd.DataFrame(
+            [[tp, fn],
+             [fp, tn]],
+            index=["Actual: Attack", "Actual: Not this tactic"],
+            columns=["Predicted: Attack", "Predicted: Not this tactic"]
+        )
+        two_by_two_matrices.append((tactic_name, two_by_two))
+
         printToLog(f"  {tactic_name} -> TP={tp}, FP={fp}, FN={fn}, TN={tn}", log_location)
-        tp_fp_fn_tn_list.append(line)
 
     distinct_labels = sorted(r["label_bin"] for r in predictions.select("label_bin").distinct().collect())
     for lbl in distinct_labels:
@@ -123,11 +123,12 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
 
     printToLog("randomForest metrics finished", log_location)
 
+    # matches the trimmed headerString above with no cfsn_mtrx, no tp_fp_fn_tn_by_class
     if countRuns:
         buff = csvAppendBuffer(localNow, conn_server_loc, key, percent_attack_data,
                            len(feature_cols), feature_cols,
                            accuracy, precision, recall, f_measure, areaUnderCurve,
-                           truePositive, falsePositive, tp_fp_fn_tn_list,
+                           truePositive, falsePositive,
                            bin_time, train_time, test_time)
                            
         header = csvAppendBuffer(*headerString)
@@ -138,7 +139,7 @@ def randForestMaster(test, train, binaryClassFlag, bin_time, log_location, rf_re
             fd.write(buff)
             fd.close()
 
-    return cfsn_df   # prints matrix to output instead of CSV
+    return two_by_two_matrices   # returns the list of (tactic_name, 2x2 df) instead of cfsn_df
             
 def gbtMaster(test, train, binaryClassFlag, bin_time, log_location, gb_results_location, countRuns, localNow, conn_server_loc, key, percent_attack_data, feature_cols):
     gbt = GBTClassifier(featuresCol = "features",
@@ -206,7 +207,6 @@ def gbtMaster(test, train, binaryClassFlag, bin_time, log_location, gb_results_l
                            percent_attack_data,
                            len(feature_cols),
                            feature_cols,
-                           gb_cfsn_mtrx,
                            gb_accuracy,
                            gb_precision,
                            gb_recall,
@@ -214,12 +214,11 @@ def gbtMaster(test, train, binaryClassFlag, bin_time, log_location, gb_results_l
                            gb_areaUnderCurve,
                            gb_truePositive,
                            gb_falsePositive,
-                           gb_tp_fp_fn_tn_list,
                            bin_time,
                            gb_train_time,
                            gb_test_time)
                            
-        header = csvAppendBuffer(*headerString)   # added * (was missing here)
+        header = csvAppendBuffer(*headerString)
         
         with open(gb_results_location, 'a') as fd:
             if getsize(gb_results_location) == 0:
