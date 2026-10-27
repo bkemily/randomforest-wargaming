@@ -1,0 +1,36 @@
+Log line,Group,T code,fwd logged,fwd +5h,fwd day,rev logged,rev +5h,rev day,Likely cause
+7,2,T1595,0,0,0,0,0,0,"no traffic between these hosts that day: wrong IP or date, or not captured"
+15,4,T1595,3,8,1497,0,0,0,traffic at the logged time: port or T code does not match the log
+20,10,T1595,0,0,0,0,0,0,"no traffic between these hosts that day: wrong IP or date, or not captured"
+21,4,T1595,0,0,8111,0,0,0,time wrong (traffic the same day)
+27,5,T1046,0,0,0,0,0,0,"no traffic between these hosts that day: wrong IP or date, or not captured"
+34,8,T1595,0,0,6891,0,0,14,time wrong (traffic the same day)
+36,2,T1210,0,4,12116,0,2,2,local time entered as UTC
+37,2,T1210,0,23,8304,0,1,5559,local time entered as UTC
+44,8,T1190,0,6,10432,0,1,1,local time entered as UTC
+45,8,T1210,0,25,26,0,1,1,local time entered as UTC
+46,9,T1210,0,0,1407,0,81,11528,reverse direction and local time entered as UTC
+49,4,T1190,0,0,24,0,0,0,time wrong (traffic the same day)
+50,7,T1190,0,0,0,0,0,0,"no traffic between these hosts that day: wrong IP or date, or not captured"
+51,7,T1190,0,0,0,0,0,0,"no traffic between these hosts that day: wrong IP or date, or not captured"
+59,3,T1210,0,0,0,0,0,0,"no traffic between these hosts that day: wrong IP or date, or not captured"
+62,2,T1070,0,0,49,390,390,17088,"reverse direction (victim -> attacker, e.g. a callback)"
+65,1,T1070,4,0,4,1,0,1,traffic at the logged time: port or T code does not match the log
+66,7,T1070,0,0,20,0,0,6,time wrong (traffic the same day)
+70,02,T1053,0,2044,4106,0,5,11,local time entered as UTC
+71,02,T1547,0,0,1357,0,0,50,time wrong (traffic the same day)
+72,8,T1053,0,0,0,0,0,0,"no traffic between these hosts that day: wrong IP or date, or not captured"
+75,4,T1053,0,10,15,0,2,2413,local time entered as UTC
+78,10,T1210,0,0,0,0,0,0,"no traffic between these hosts that day: wrong IP or date, or not captured"
+79,5,T1053,0,0,13,0,0,0,time wrong (traffic the same day)
+80,3,T1210,0,0,0,0,0,0,"no traffic between these hosts that day: wrong IP or date, or not captured"
+82,5,T1547,0,0,38,0,0,2,time wrong (traffic the same day)
+83,10,T1041,0,6,12,0,2,6,local time entered as UTC
+84,10,T1041,0,0,25,0,0,1,time wrong (traffic the same day)
+85,1,T1190,0,0,0,0,0,0,"no traffic between these hosts that day: wrong IP or date, or not captured"
+86,1,T1190,4,0,4,1,0,1,traffic at the logged time: port or T code does not match the log
+87,9,T1041,0,0,249,0,0,1,time wrong (traffic the same day)
+89,4,T1651,0,0,6258,0,0,2,time wrong (traffic the same day)
+92,2,T1021,0,15,18,0,0,0,local time entered as UTC
+93,5,T1136,0,0,0,0,0,0,"no traffic between these hosts that day: wrong IP or date, or not captured"
+94,5,T1562,0,0,12,0,0,0,time wrong (traffic the same day)
